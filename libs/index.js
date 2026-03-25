@@ -16,6 +16,8 @@ const PERMISSIONS = [
     "--window-size=1366,768",
 ]
 
+const MAX_CONCURRENT = 6
+
 function delay(time){
     return new Promise(resolve => setTimeout(resolve, time));
 }
@@ -82,11 +84,14 @@ function clickPage(Driver, page_id){
     });
 }
 
-async function buildDriver(proxy){
+async function buildDriver(proxy, headless){
     var options = new chrome.Options()
     if (proxy)
         options.addArguments(`--proxy-server=http://${proxy}`)
-    options.addArguments('--headless=new')  // 👈 add this line
+    if (headless)
+        options.addArguments('--headless=new')
+    options.addArguments('--no-first-run')
+    options.addArguments('--no-default-browser-check')
     PERMISSIONS.forEach(perms => options.addArguments(perms))
     options.excludeSwitches('enable-automation')
     options.excludeSwitches('enable-logging')
@@ -121,10 +126,12 @@ async function typeSlowly(element, text){
     }
 }
 
-var driverList = [];
+var driverList = []
+var usedDriver = 0
+var isRunning = false
 
-async function Direct(url, proxy){
-    var driver = await buildDriver(proxy)
+async function Direct(url, proxy, headless){
+    var driver = await buildDriver(proxy, headless)
     await Stealth(driver)
     await driver.get(url)
     await randomDelay(800, 1500)
@@ -132,8 +139,8 @@ async function Direct(url, proxy){
     driverList.push({driver: driver, time: Date.now()})
 }
 
-async function googleSearch(url, keyboard){
-    var driver = await buildDriver(null)
+async function googleSearch(url, keyboard, headless){
+    var driver = await buildDriver(null, headless)
     await Stealth(driver)
     await bypassConsent(driver)
     await driver.wait(
@@ -154,8 +161,8 @@ async function googleSearch(url, keyboard){
     driverList.push({driver: driver, time: Date.now()})
 }
 
-async function proxyServer(url, keyboard){
-    var driver = await buildDriver(null)
+async function proxyServer(url, keyboard, headless){
+    var driver = await buildDriver(null, headless)
     await Stealth(driver)
     await driver.get('https://www.blockaway.net')
     await driver.findElement(webDriver.By.id('url')).sendKeys('https://www.google.com/')
@@ -181,11 +188,10 @@ async function proxyServer(url, keyboard){
     driverList.push({driver: driver, time: Date.now()})
 }
 
-var usedDriver = 0
 async function driverTimeout(){
     setInterval(async () => {
         if (driverList.length > 0)
-            for (var i = 0; i < driverList.length; i++){
+            for (var i = driverList.length - 1; i >= 0; i--){
                 if(Date.now() - driverList[i].time > 60000){
                     await driverList[i].driver.quit()
                     driverList.splice(i, 1)
@@ -194,41 +200,53 @@ async function driverTimeout(){
     }, 4000);
 }
 
-async function main(url, keyboard, count, option){
+async function main(url, keyboard, count, option, headless){
+    isRunning = true
+    usedDriver = 0
     driverTimeout()
     var proxy = await loadproxy()
     if (option == "Direct"){
         console.log("[DIRECT]: process started | URL: " + url)
-        while (usedDriver < count){
-            await Direct(url, null)  // no proxy for Direct
+        while (usedDriver < count && isRunning){
+            if (driverList.length >= MAX_CONCURRENT){
+                await delay(2000)
+                continue
+            }
+            await Direct(url, null, headless)
             usedDriver += 1
         }
     }else if (option == "Google"){
         console.log("[SEARCH]: process started | URL: " + url)
-        while (usedDriver < count){
-            await googleSearch(url, keyboard)
+        while (usedDriver < count && isRunning){
+            if (driverList.length >= MAX_CONCURRENT){
+                await delay(2000)
+                continue
+            }
+            await googleSearch(url, keyboard, headless)
             usedDriver += 1
         }
     }else if (option == "Proxy"){
         console.log("[PROXY]: process started | URL: " + url)
-        while (usedDriver < count){
-            await proxyServer(url, keyboard)
+        while (usedDriver < count && isRunning){
+            if (driverList.length >= MAX_CONCURRENT){
+                await delay(2000)
+                continue
+            }
+            await proxyServer(url, keyboard, headless)
             usedDriver += 1
         }
     }
 }
 
 async function stop(){
-    var stopcount = 0;
-    var Interval = setInterval(async ()=>{
-        for (var i = 0; i < driverList.length; i++){
+    isRunning = false
+    for (var i = driverList.length - 1; i >= 0; i--){
+        try {
             await driverList[i].driver.quit()
-            driverList.splice(i, 1)
-        }
-        if (stopcount > usedDriver)
-            clearInterval(Interval)
-        stopcount += 1
-    }, 2500)
+        } catch(e) {}
+        driverList.splice(i, 1)
+    }
+    usedDriver = 0
 }
 
 module.exports = { 

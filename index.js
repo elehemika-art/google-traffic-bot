@@ -3,6 +3,7 @@ const seobot = require('./libs/index')
 const proxys = require('./libs/proxy')
 const { app, BrowserWindow, ipcMain } = require('electron')
 
+
 async function createWindow() {
     const win = new BrowserWindow({
         width: 400,
@@ -15,18 +16,22 @@ async function createWindow() {
     win.loadFile('index.html')
 }
 
-ipcMain.handle('start', async (event, url, keyboard, count, option) => {
-    seobot.main(url, keyboard, count, option)
+
+ipcMain.handle('start', async (event, url, keyboard, count, option, headless) => {
+    seobot.main(url, keyboard, count, option, headless)  // 👈 pass headless through
 })
+
 
 ipcMain.handle('stop', async (event) => {
     seobot.stop()
 })
 
+
 ipcMain.handle('proxylist', async (event) => {
     var proxylist = await proxys()
     return proxylist.length
 })
+
 
 app.whenReady().then(() => {
     createWindow()
@@ -36,6 +41,7 @@ app.whenReady().then(() => {
         }
     })
 })
+
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

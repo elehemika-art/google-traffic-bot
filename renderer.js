@@ -22,11 +22,12 @@ $(document).ready(async function() {
         var keyboard = $("#keyboard-i").val() || ""
         var count = $("#count").val()
         var option = $("#option").val()
+        var headless = $("#headless").is(":checked")  // 👈 reads the checkbox
         if (url.length < 8) return alertbox("URL cant be empty!", 'danger', 5000)
         if (option == "Google")
             if (keyboard <= 0) return alertbox("Keyboard cant be empty!", 'danger', 5000)
         if (count.length <= 0 || parseInt(count) <= 0) return alertbox("Count cant be zero!", 'danger', 5000)
-        window.seo.start(url, keyboard, parseInt(count), option)
+        window.seo.start(url, keyboard, parseInt(count), option, headless)  // 👈 passes headless
         alertbox("Process started", 'success', 20000)
     })
 
