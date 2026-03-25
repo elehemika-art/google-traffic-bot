@@ -199,7 +199,7 @@ async function main(url, keyboard, count, option){
     if (option == "Direct"){
         console.log("[DIRECT]: process started | URL: " + url)
         while (usedDriver < count){
-            await Direct(url, proxy.length > 0 ? proxy[usedDriver] : null)
+            await Direct(url, null)  // no proxy for Direct
             usedDriver += 1
         }
     }else if (option == "Google"){
