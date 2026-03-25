@@ -86,6 +86,7 @@ async function buildDriver(proxy){
     var options = new chrome.Options()
     if (proxy)
         options.addArguments(`--proxy-server=http://${proxy}`)
+    options.addArguments('--headless=new')  // 👈 add this line
     PERMISSIONS.forEach(perms => options.addArguments(perms))
     options.excludeSwitches('enable-automation')
     options.excludeSwitches('enable-logging')
