@@ -105,7 +105,7 @@ async function buildDriver(proxy, headless){
 
 async function bypassConsent(driver){
     await driver.get("https://www.google.com/")
-    await randomDelay(1500, 2500)
+    await randomDelay(1000, 2500)
     try {
         var buttons = await driver.findElements(webDriver.By.css('button'))
         for (var b of buttons){
@@ -192,7 +192,7 @@ async function driverTimeout(){
     setInterval(async () => {
         if (driverList.length > 0)
             for (var i = driverList.length - 1; i >= 0; i--){
-                if(Date.now() - driverList[i].time > 60000){
+                if(Date.now() - driverList[i].time > 55000){
                     await driverList[i].driver.quit()
                     driverList.splice(i, 1)
                 }
@@ -209,7 +209,7 @@ async function main(url, keyboard, count, option, headless){
         console.log("[DIRECT]: process started | URL: " + url)
         while (usedDriver < count && isRunning){
             if (driverList.length >= MAX_CONCURRENT){
-                await delay(2000)
+                await delay(500)
                 continue
             }
             await Direct(url, null, headless)
@@ -219,7 +219,7 @@ async function main(url, keyboard, count, option, headless){
         console.log("[SEARCH]: process started | URL: " + url)
         while (usedDriver < count && isRunning){
             if (driverList.length >= MAX_CONCURRENT){
-                await delay(2000)
+                await delay(700)
                 continue
             }
             await googleSearch(url, keyboard, headless)
@@ -229,7 +229,7 @@ async function main(url, keyboard, count, option, headless){
         console.log("[PROXY]: process started | URL: " + url)
         while (usedDriver < count && isRunning){
             if (driverList.length >= MAX_CONCURRENT){
-                await delay(2000)
+                await delay(1000)
                 continue
             }
             await proxyServer(url, keyboard, headless)
