@@ -1,5 +1,17 @@
 $(document).ready(async function() {
+    // Load past inputs from localStorage
+    if (localStorage.getItem('url')) $("#url").val(localStorage.getItem('url'));
+    if (localStorage.getItem('keyboard')) $("#keyboard-i").val(localStorage.getItem('keyboard'));
+    if (localStorage.getItem('count')) $("#count").val(localStorage.getItem('count'));
+    if (localStorage.getItem('maxTabs')) $("#maxTabs").val(localStorage.getItem('maxTabs'));
+    if (localStorage.getItem('option')) {
+        $("#option").val(localStorage.getItem('option'));
+        if (localStorage.getItem('option') == "Google") $("#keyboard").show();
+    }
+    if (localStorage.getItem('headless') === 'true') $("#headless").prop('checked', true);
+
     $("#keyboard").hide()
+    if ($("#option").val() == "Google") $("#keyboard").show(); // Ensure keyboard shows if Google was saved
     var porxylist = await window.seo.proxylist()
     $("#proxys").val(porxylist)
     var lastClass = ""
@@ -34,6 +46,15 @@ $(document).ready(async function() {
         if (option == "Google")
             if (keyboard <= 0) return alertbox("Keyboard cant be empty!", 'danger', 5000)
         if (count.length <= 0 || parseInt(count) <= 0) return alertbox("Count cant be zero!", 'danger', 5000)
+        
+        // Save current inputs to localStorage for next time
+        localStorage.setItem('url', url);
+        localStorage.setItem('keyboard', keyboard);
+        localStorage.setItem('count', count);
+        localStorage.setItem('maxTabs', maxTabs);
+        localStorage.setItem('option', option);
+        localStorage.setItem('headless', headless);
+
         window.seo.start(url, keyboard, parseInt(count), option, headless, parseInt(maxTabs))  // 👈 passes maxTabs
         alertbox("Process started", 'success', 20000)
     })
