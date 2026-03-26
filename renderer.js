@@ -9,9 +9,38 @@ $(document).ready(async function() {
         if (localStorage.getItem('option') == "Google") $("#keyboard").show();
     }
     if (localStorage.getItem('headless') === 'true') $("#headless").prop('checked', true);
+    if (localStorage.getItem('minimize') === 'false') $("#minimize-windows").prop('checked', false);
 
     $("#keyboard").hide()
+    
+    // Setup option descriptions
+    const optionDescriptions = {
+        "Direct": "Opens your URL directly using your web connection. Fast, but uses your regular IP.",
+        "Google": "Goes to Google, searches your keyword, and organically clicks your site.",
+        "Proxy": "Hides your IP by searching through a BlockAway proxy server."
+    };
+    
+    function updateOptionDesc() {
+        $("#option-desc").text(optionDescriptions[$("#option").val()]);
+    }
+    updateOptionDesc();
+
     if ($("#option").val() == "Google") $("#keyboard").show(); // Ensure keyboard shows if Google was saved
+    
+    // Mutual exclusivity for checkboxes
+    function enforceCheckboxRules() {
+        if ($("#headless").is(":checked")) {
+            $("#minimize-windows").prop("checked", false).prop("disabled", true);
+        } else {
+            $("#minimize-windows").prop("disabled", false);
+        }
+    }
+    
+    $("#headless").change(enforceCheckboxRules);
+    
+    // Run once on load
+    enforceCheckboxRules();
+
     var porxylist = await window.seo.proxylist()
     $("#proxys").val(porxylist)
     var lastClass = ""
@@ -31,6 +60,7 @@ $(document).ready(async function() {
 
     window.seo.onStatsUpdate((stats) => {
         $("#stat-active").text(stats.active)
+        $("#stat-remaining").text(stats.remaining)
         $("#stat-completed").text(stats.completed)
         $("#stat-failed").text(stats.failed)
     })
@@ -42,6 +72,7 @@ $(document).ready(async function() {
         var maxTabs = $("#maxTabs").val() || 5
         var option = $("#option").val()
         var headless = $("#headless").is(":checked")  // 👈 reads the checkbox
+        var minimize = $("#minimize-windows").is(":checked") // 👈 reads the new checkbox
         if (url.length < 8) return alertbox("URL cant be empty!", 'danger', 5000)
         if (option == "Google")
             if (keyboard <= 0) return alertbox("Keyboard cant be empty!", 'danger', 5000)
@@ -54,8 +85,9 @@ $(document).ready(async function() {
         localStorage.setItem('maxTabs', maxTabs);
         localStorage.setItem('option', option);
         localStorage.setItem('headless', headless);
+        localStorage.setItem('minimize', minimize);
 
-        window.seo.start(url, keyboard, parseInt(count), option, headless, parseInt(maxTabs))  // 👈 passes maxTabs
+        window.seo.start(url, keyboard, parseInt(count), option, headless, parseInt(maxTabs), minimize)
         alertbox("Process started", 'success', 20000)
     })
 
@@ -65,6 +97,7 @@ $(document).ready(async function() {
     })
 
     $("#option").change(function(event) {
+        updateOptionDesc();
         if (this.value == "Google")
             $("#keyboard").show(500)
         else

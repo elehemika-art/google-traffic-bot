@@ -61,8 +61,8 @@ function findSiteUrl(Driver, url){
 
 function nextPage(Driver, url, pageCount = 0){
     return new Promise(async (r) => {
-        if (pageCount >= 10){
-            console.log('[SEARCH]: site not found in 10 pages, stopping')
+        if (pageCount >= 25){
+            console.log('[SEARCH]: site not found in 25 pages, stopping')
             return r(0)
         }
         try {
@@ -156,7 +156,12 @@ let launchQueue = []
 function broadcastStats() {
     const wins = BrowserWindow.getAllWindows();
     if (wins.length > 0) {
-        wins[0].webContents.send('stats-update', { active: activeCount, completed: totalCompleted, failed: totalFailed });
+        wins[0].webContents.send('stats-update', { 
+            active: activeCount, 
+            completed: totalCompleted, 
+            failed: totalFailed,
+            remaining: launchQueue.length
+        });
     }
 }
 
@@ -221,12 +226,12 @@ async function organicDwell(driver, originalUrl) {
     await doDwell(dwell2);
 }
 
-async function Direct(url, headless, proxy){
+async function Direct(url, headless, proxy, minimizeOption){
     let driver = null
     try {
         driver = await buildDriver(proxy, headless)
         driverList.push({ driver: driver, time: Date.now() })
-        try { await driver.manage().window().minimize() } catch(e) {}
+        if (minimizeOption) { try { await driver.manage().window().minimize() } catch(e) {} }
         await Stealth(driver)
         await driver.get(url)
         await randomDelay(800, 1500)
@@ -242,12 +247,12 @@ async function Direct(url, headless, proxy){
     }
 }
 
-async function googleSearch(url, keyboard, headless, proxy){
+async function googleSearch(url, keyboard, headless, proxy, minimizeOption){
     var driver = null
     try {
         driver = await buildDriver(proxy, headless)
         driverList.push({ driver: driver, time: Date.now() })
-        try { await driver.manage().window().minimize() } catch(e) {}
+        if (minimizeOption) { try { await driver.manage().window().minimize() } catch(e) {} }
         await Stealth(driver)
         await bypassConsent(driver)
         await driver.wait(
@@ -277,12 +282,12 @@ async function googleSearch(url, keyboard, headless, proxy){
     }
 }
 
-async function proxyServer(url, keyboard, headless, proxy){
+async function proxyServer(url, keyboard, headless, proxy, minimizeOption){
     var driver = null
     try {
         driver = await buildDriver(proxy, headless)
         driverList.push({ driver: driver, time: Date.now() })
-        try { await driver.manage().window().minimize() } catch(e) {}
+        if (minimizeOption) { try { await driver.manage().window().minimize() } catch(e) {} }
         await Stealth(driver)
         await driver.get('https://www.blockaway.net')
         await driver.findElement(webDriver.By.id('url')).sendKeys('https://www.google.com/')
@@ -342,7 +347,7 @@ async function runWorker() {
     }
 }
 
-async function main(url, keyboard, count, option, headless, concurrent){
+async function main(url, keyboard, count, option, headless, concurrent, minimizeOption){
     isRunning = true;
     activeCount = 0;
     totalCompleted = 0;
@@ -360,9 +365,9 @@ async function main(url, keyboard, count, option, headless, concurrent){
     // Populate queue with proxy rotation
     for (let i = 0; i < count; i++) {
         const proxy = cleanProxies.length > 0 ? cleanProxies[i % cleanProxies.length] : null;
-        const taskFn = option === "Direct" ? () => Direct(url, headless, proxy) :
-                       option === "Google" ? () => googleSearch(url, keyboard, headless, proxy) :
-                       () => proxyServer(url, keyboard, headless, proxy);
+        const taskFn = option === "Direct" ? () => Direct(url, headless, proxy, minimizeOption) :
+                       option === "Google" ? () => googleSearch(url, keyboard, headless, proxy, minimizeOption) :
+                       () => proxyServer(url, keyboard, headless, proxy, minimizeOption);
         launchQueue.push(taskFn);
     }
 
