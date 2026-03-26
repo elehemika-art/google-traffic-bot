@@ -16,10 +16,10 @@ const PERMISSIONS = [
     "--window-size=1366,768",
 ]
 
-const MAX_CONCURRENT = 6
+const MAX_CONCURRENT = 5
 
 function delay(time){
-    return new Promise(resolve => setTimeout(resolve, time));
+    return new Promise(resolve => setTimeout(resolve, time))
 }
 
 function randomDelay(min, max){
@@ -28,27 +28,35 @@ function randomDelay(min, max){
 
 function Stealth(driver){
     return new Promise(async function(resolve){
-        var connection = await driver.createCDPConnection('page')
-        await connection.execute('Runtime.enable', {}, null)
-        await connection.execute('Page.enable', {}, null)
-        await connection.execute("Page.addScriptToEvaluateOnNewDocument", {
-            source: spoofing()
-        }, null)
+        try {
+            var connection = await driver.createCDPConnection('page')
+            await connection.execute('Runtime.enable', {}, null)
+            await connection.execute('Page.enable', {}, null)
+            await connection.execute("Page.addScriptToEvaluateOnNewDocument", {
+                source: spoofing()
+            }, null)
+        } catch(e) {
+            // Silent
+        }
         resolve(true)
     })
 }
 
 function findSiteUrl(Driver, url){
     return new Promise(async (r) => {
-        var sites = await Driver.findElements(webDriver.By.className('yuRUbf'))
-        for(var i = 0; i < sites.length; i++){
-            var target_url = await sites[i].findElement(webDriver.By.tagName('a')).getAttribute('href')
-            if(target_url.match(url)){
-                return r(i)
+        try {
+            var sites = await Driver.findElements(webDriver.By.className('yuRUbf'))
+            for(var i = 0; i < sites.length; i++){
+                var target_url = await sites[i].findElement(webDriver.By.tagName('a')).getAttribute('href')
+                if(target_url.match(url)){
+                    return r(i)
+                }
             }
+        } catch(e) {
+            console.log('[FIND]: error finding site', e.message)
         }
         r(-1)
-    });
+    })
 }
 
 function nextPage(Driver, url, pageCount = 0){
@@ -68,20 +76,28 @@ function nextPage(Driver, url, pageCount = 0){
         await randomDelay(800, 1500)
         if(findURL == -1){
             await nextPage(Driver, url, pageCount + 1)
-        }else{
+        } else {
             r(findURL)
         }
-    });
+    })
 }
 
 function clickPage(Driver, page_id){
     return new Promise(async (r) => {
-        var sites = await Driver.findElements(webDriver.By.className('LC20lb MBeuO DKV0Md'))
-        await sites[page_id].click()
-        await randomDelay(800, 1500)
-        await Driver.executeScript(auto.scroll())
+        try {
+            var sites = await Driver.findElements(webDriver.By.className('LC20lb MBeuO DKV0Md'))
+            if (!sites[page_id]){
+                console.log('[CLICK]: page_id out of range')
+                return r(false)
+            }
+            await sites[page_id].click()
+            await randomDelay(800, 1500)
+            await Driver.executeScript(auto.scroll())
+        } catch(e) {
+            console.log('[CLICK]: error clicking page', e.message)
+        }
         r(true)
-    });
+    })
 }
 
 async function buildDriver(proxy, headless){
@@ -126,130 +142,260 @@ async function typeSlowly(element, text){
     }
 }
 
-var driverList = []
-var usedDriver = 0
-var isRunning = false
+// --- State ---
+const { BrowserWindow } = require('electron');
+let driverList = []
+let isRunning = false
+let activeCount = 0
+let totalCompleted = 0
+let totalFailed = 0;
+process.setMaxListeners(20); // Fix MaxListenersExceeded
+let launcherInterval = null
+let launchQueue = []
 
-async function Direct(url, proxy, headless){
-    var driver = await buildDriver(proxy, headless)
-    await Stealth(driver)
-    await driver.get(url)
-    await randomDelay(800, 1500)
-    await driver.executeScript(auto.scroll())
-    driverList.push({driver: driver, time: Date.now()})
+function broadcastStats() {
+    const wins = BrowserWindow.getAllWindows();
+    if (wins.length > 0) {
+        wins[0].webContents.send('stats-update', { active: activeCount, completed: totalCompleted, failed: totalFailed });
+    }
 }
 
-async function googleSearch(url, keyboard, headless){
-    var driver = await buildDriver(null, headless)
-    await Stealth(driver)
-    await bypassConsent(driver)
-    await driver.wait(
-        webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"]')),
-        10000
-    )
-    var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"]'))
-    await typeSlowly(searchBox, keyboard)
-    await randomDelay(300, 600)
-    await searchBox.sendKeys(webDriver.Key.RETURN)
-    await randomDelay(1500, 2500)
-    var pageId = await findSiteUrl(driver, url)
-    await randomDelay(800, 1500)
-    if (pageId == -1)
-        pageId = await nextPage(driver, url, 0)
-    await randomDelay(500, 1000)
-    await clickPage(driver, pageId)
-    driverList.push({driver: driver, time: Date.now()})
-}
+async function organicDwell(driver, originalUrl) {
+    await driver.executeScript(auto.scroll());
+    // Randomized Dwell Times between 45s and 75s
+    let totalDwell = Math.floor(Math.random() * (75000 - 45000 + 1)) + 45000;
+    
+    let dwell1 = totalDwell / 2;
+    let dwell2 = totalDwell - dwell1;
 
-async function proxyServer(url, keyboard, headless){
-    var driver = await buildDriver(null, headless)
-    await Stealth(driver)
-    await driver.get('https://www.blockaway.net')
-    await driver.findElement(webDriver.By.id('url')).sendKeys('https://www.google.com/')
-    await driver.findElement(webDriver.By.id('requestSubmit')).click()
-    await delay(12000)
-    await bypassConsent(driver)
-    await driver.wait(
-        webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"]')),
-        10000
-    )
-    var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"]'))
-    await typeSlowly(searchBox, keyboard)
-    await randomDelay(300, 600)
-    await searchBox.sendKeys(webDriver.Key.RETURN)
-    await randomDelay(1500, 2500)
-    var pageId = await findSiteUrl(driver, url)
-    await randomDelay(800, 1500)
-    if (pageId == -1)
-        pageId = await nextPage(driver, url, 0)
-    await randomDelay(500, 1000)
-    console.log(pageId)
-    await clickPage(driver, pageId)
-    driverList.push({driver: driver, time: Date.now()})
-}
-
-async function driverTimeout(){
-    setInterval(async () => {
-        if (driverList.length > 0)
-            for (var i = driverList.length - 1; i >= 0; i--){
-                if(Date.now() - driverList[i].time > 55000){
-                    await driverList[i].driver.quit()
-                    driverList.splice(i, 1)
-                }
-            }
-    }, 4000);
-}
-
-async function main(url, keyboard, count, option, headless){
-    isRunning = true
-    usedDriver = 0
-    driverTimeout()
-    var proxy = await loadproxy()
-    if (option == "Direct"){
-        console.log("[DIRECT]: process started | URL: " + url)
-        while (usedDriver < count && isRunning){
-            if (driverList.length >= MAX_CONCURRENT){
-                await delay(500)
-                continue
-            }
-            await Direct(url, null, headless)
-            usedDriver += 1
+    async function doDwell(time) {
+        let elapsed = 0;
+        while (elapsed < time) {
+            try {
+                // Jiggle Mouse organically
+                await driver.executeScript(`
+                    var x = Math.floor(Math.random() * window.innerWidth);
+                    var y = Math.floor(Math.random() * window.innerHeight);
+                    var evt = new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true });
+                    document.dispatchEvent(evt);
+                `);
+            } catch(e) {}
+            let waitTime = Math.floor(Math.random() * (4000 - 1000 + 1)) + 1000;
+            if (elapsed + waitTime > time) waitTime = time - elapsed;
+            await delay(waitTime);
+            elapsed += waitTime;
         }
-    }else if (option == "Google"){
-        console.log("[SEARCH]: process started | URL: " + url)
-        while (usedDriver < count && isRunning){
-            if (driverList.length >= MAX_CONCURRENT){
-                await delay(700)
-                continue
+    }
+
+    await doDwell(dwell1);
+
+    // Internal Page Browsing (HUGE for SEO)
+    try {
+        let currentUrlObj = null;
+        try { currentUrlObj = new URL(originalUrl); } catch(e) {}
+        
+        if (currentUrlObj) {
+            let baseDomain = currentUrlObj.hostname.replace('www.', '');
+            const links = await driver.findElements(webDriver.By.css('a'));
+            let validLinks = [];
+            for (let i = 0; i < Math.min(links.length, 50); i++) {
+                try {
+                    let href = await links[i].getAttribute('href');
+                    if (href && href.includes(baseDomain) && !href.includes('#') && !href.match(/\.(jpg|png|gif|pdf)$/i)) {
+                        let displayed = await links[i].isDisplayed();
+                        if (displayed) validLinks.push(links[i]);
+                    }
+                } catch(e) {}
             }
-            await googleSearch(url, keyboard, headless)
-            usedDriver += 1
-        }
-    }else if (option == "Proxy"){
-        console.log("[PROXY]: process started | URL: " + url)
-        while (usedDriver < count && isRunning){
-            if (driverList.length >= MAX_CONCURRENT){
-                await delay(1000)
-                continue
+            if (validLinks.length > 0) {
+                const randomLink = validLinks[Math.floor(Math.random() * validLinks.length)];
+                await driver.executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", randomLink);
+                await delay(1500);
+                await driver.executeScript("arguments[0].click();", randomLink);
+                await delay(3000);
+                await driver.executeScript(auto.scroll()); // Start scrolling on new page
             }
-            await proxyServer(url, keyboard, headless)
-            usedDriver += 1
         }
+    } catch(e) {}
+
+    await doDwell(dwell2);
+}
+
+async function Direct(url, headless, proxy){
+    let driver = null
+    try {
+        driver = await buildDriver(proxy, headless)
+        driverList.push({ driver: driver, time: Date.now() })
+        try { await driver.manage().window().minimize() } catch(e) {}
+        await Stealth(driver)
+        await driver.get(url)
+        await randomDelay(800, 1500)
+        await organicDwell(driver, url) // Smart browsing
+    } catch(e) {
+        console.log('[DIRECT ERROR]:', e.message)
+        throw e;
+    } finally {
+        if (driver) {
+            try { await driver.quit() } catch(_) {}
+            driverList = driverList.filter(d => d.driver !== driver)
+        }
+    }
+}
+
+async function googleSearch(url, keyboard, headless, proxy){
+    var driver = null
+    try {
+        driver = await buildDriver(proxy, headless)
+        driverList.push({ driver: driver, time: Date.now() })
+        try { await driver.manage().window().minimize() } catch(e) {}
+        await Stealth(driver)
+        await bypassConsent(driver)
+        await driver.wait(
+            webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"]')),
+            10000
+        )
+        var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"]'))
+        await typeSlowly(searchBox, keyboard)
+        await randomDelay(300, 600)
+        await searchBox.sendKeys(webDriver.Key.RETURN)
+        await randomDelay(1500, 2500)
+        var pageId = await findSiteUrl(driver, url)
+        await randomDelay(800, 1500)
+        if (pageId == -1)
+            pageId = await nextPage(driver, url, 0)
+        await randomDelay(500, 1000)
+        await clickPage(driver, pageId)
+        await organicDwell(driver, url) // Smart browsing
+    } catch(e) {
+        console.log('[GOOGLE]: error during search', e.message)
+        throw e;
+    } finally {
+        if (driver){
+            try { await driver.quit() } catch(_) {}
+            driverList = driverList.filter(d => d.driver !== driver)
+        }
+    }
+}
+
+async function proxyServer(url, keyboard, headless, proxy){
+    var driver = null
+    try {
+        driver = await buildDriver(proxy, headless)
+        driverList.push({ driver: driver, time: Date.now() })
+        try { await driver.manage().window().minimize() } catch(e) {}
+        await Stealth(driver)
+        await driver.get('https://www.blockaway.net')
+        await driver.findElement(webDriver.By.id('url')).sendKeys('https://www.google.com/')
+        await driver.findElement(webDriver.By.id('requestSubmit')).click()
+        await delay(12000)
+        await bypassConsent(driver)
+        await driver.wait(
+            webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"]')),
+            10000
+        )
+        var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"]'))
+        await typeSlowly(searchBox, keyboard)
+        await randomDelay(300, 600)
+        await searchBox.sendKeys(webDriver.Key.RETURN)
+        await randomDelay(1500, 2500)
+        var pageId = await findSiteUrl(driver, url)
+        await randomDelay(800, 1500)
+        if (pageId == -1)
+            pageId = await nextPage(driver, url, 0)
+        await randomDelay(500, 1000)
+        await clickPage(driver, pageId)
+        await organicDwell(driver, url) // Smart browsing
+    } catch(e) {
+        console.log('[PROXY]: error during proxy search', e.message)
+        throw e;
+    } finally {
+        if (driver){
+            try { await driver.quit() } catch(_) {}
+            driverList = driverList.filter(d => d.driver !== driver)
+        }
+    }
+}
+
+async function runWorker() {
+    while (isRunning && launchQueue.length > 0) {
+        const task = launchQueue.shift();
+        if (!task) break;
+
+        activeCount++;
+        broadcastStats();
+        let success = true;
+        try {
+            await task(); 
+        } catch (e) {
+            console.log('[WORKER ERROR]:', e.message);
+            success = false;
+        } finally {
+            activeCount--;
+            if (success) totalCompleted++;
+            else totalFailed++;
+            broadcastStats();
+        }
+
+        if (isRunning && launchQueue.length > 0) {
+            await delay(500); 
+        }
+    }
+}
+
+async function main(url, keyboard, count, option, headless, concurrent){
+    isRunning = true;
+    activeCount = 0;
+    totalCompleted = 0;
+    totalFailed = 0;
+    launchQueue = [];  
+    broadcastStats();
+    if (launcherInterval) clearInterval(launcherInterval);
+
+    // Load and clean proxy list
+    const proxies = await loadproxy();
+    const cleanProxies = proxies.map(p => p.trim()).filter(p => p.length > 5);
+
+    console.log(`[${option}]: process started | URL: ${url} | Count: ${count} | MaxTabs: ${concurrent} | Proxies: ${cleanProxies.length}`);
+
+    // Populate queue with proxy rotation
+    for (let i = 0; i < count; i++) {
+        const proxy = cleanProxies.length > 0 ? cleanProxies[i % cleanProxies.length] : null;
+        const taskFn = option === "Direct" ? () => Direct(url, headless, proxy) :
+                       option === "Google" ? () => googleSearch(url, keyboard, headless, proxy) :
+                       () => proxyServer(url, keyboard, headless, proxy);
+        launchQueue.push(taskFn);
+    }
+
+    // Initial staggered launch (up to concurrent limit)
+    const numWorkers = Math.min(concurrent || MAX_CONCURRENT, count);
+    for (let i = 0; i < numWorkers; i++) {
+        if (!isRunning) break;
+        runWorker(); // Start worker (async)
+        await delay(2000); // 2s interval for initial launch
     }
 }
 
 async function stop(){
     isRunning = false
-    for (var i = driverList.length - 1; i >= 0; i--){
-        try {
-            await driverList[i].driver.quit()
-        } catch(e) {}
-        driverList.splice(i, 1)
+    if (launcherInterval) {
+        clearInterval(launcherInterval);
+        launcherInterval = null;
     }
-    usedDriver = 0
+    
+    launchQueue = [];
+    activeCount = 0;
+
+    // Quit all active drivers immediately
+    const driversToQuit = [...driverList];
+    driverList = [];
+    for (const entry of driversToQuit) {
+        try { await entry.driver.quit() } catch(e) {}
+    }
+    
+    broadcastStats();
 }
 
-module.exports = { 
+module.exports = {
     main: main,
     stop: stop
 }
