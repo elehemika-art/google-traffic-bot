@@ -242,11 +242,50 @@
             height: 16px;
             opacity: 0.7;
             transition: all 0.2s;
+            position: relative;
         }
         .info-icon:hover {
             opacity: 1;
             background: var(--primary);
             color: #0d1117;
+        }
+        .info-icon::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 17, 23, 0.95);
+            color: #c9d1d9;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            line-height: 1.4;
+            border-radius: 6px;
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            white-space: normal;
+            width: 220px;
+            text-align: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .info-icon:hover::after {
+            opacity: 1;
+            visibility: visible;
+            bottom: 140%;
+        }
+        .input-desc {
+            font-size: 10px;
+            color: #8b949e;
+            margin-top: 4px;
+            margin-bottom: 8px;
+            padding-left: 2px;
+            font-style: italic;
+            text-align: center;
         }
         #option-desc {
             font-size: 11.5px;
@@ -282,18 +321,20 @@
                 <input type="text" id="keyboard-i" class="form-control" placeholder="Search phrase...">
             </div>
             
-            <div class="row gx-2 mb-3">
+            <div class="row gx-2 mb-2">
                 <div>
                     <div class="input-group">
                         <span class="input-group-text">COUNT</span>
                         <input type="number" id="count" class="form-control" placeholder="10">
                     </div>
+                    <div class="input-desc">Total visits to complete</div>
                 </div>
                 <div>
                     <div class="input-group">
                         <span class="input-group-text">TABS</span>
                         <input type="number" id="maxTabs" class="form-control" placeholder="5" value="5">
                     </div>
+                    <div class="input-desc">Max tabs open at once</div>
                 </div>
             </div>
 
@@ -317,7 +358,7 @@
                 <label class="form-check-label" for="headless">
                     Run invisibly (Headless Mode)
                 </label>
-                <span class="info-icon" title="Runs Chrome completely hidden. Uses less CPU but is easier for anti-bot systems to detect.">?</span>
+                <span class="info-icon" data-tooltip="Runs Chrome completely hidden. Uses less CPU but is easier for anti-bot systems to detect.">?</span>
             </div>
             
             <div class="form-check" style="margin-top: 8px; margin-bottom: 5px;">
@@ -325,7 +366,7 @@
                 <label class="form-check-label" for="minimize-windows">
                     Auto-minimize tasks to Dock
                 </label>
-                <span class="info-icon" title="Opens the window natively but sweeps it into your macOS Dock instantly. Great for stealth and keeping your screen clean.">?</span>
+                <span class="info-icon" data-tooltip="Opens the window natively but sweeps it into your macOS Dock instantly. Great for stealth and keeping your screen clean.">?</span>
             </div>
         </div>
         
