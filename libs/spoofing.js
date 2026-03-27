@@ -19,8 +19,9 @@ module.exports = function(){
             enumerable: true,
             configurable: true
         })
+
+        const elementDescriptor=Object.getOwnPropertyDescriptor(HTMLElement.prototype,"offsetHeight")
+        Object.defineProperty(HTMLDivElement.prototype,"offsetHeight",{...elementDescriptor,get:function(){return"modernizr"===this.id?1:elementDescriptor.get.apply(this)}})
     })()
-    const elementDescriptor=Object.getOwnPropertyDescriptor(HTMLElement.prototype,"offsetHeight")
-    Object.defineProperty(HTMLDivElement.prototype,"offsetHeight",{...elementDescriptor,get:function(){return"modernizr"===this.id?1:elementDescriptor.get.apply(this)}})
     `
 }

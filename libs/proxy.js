@@ -1,36 +1,30 @@
 const fs = require('fs');
 
 module.exports = function () {
-    const proxyList = []; // Fixed typo: changed 'porxyList' to 'proxyList'
+    const proxyList = [];
     const path = "./proxy/";
 
-    return new Promise(function (resolve, reject) {
+    return new Promise(function (resolve) {
         fs.readdir(path, (err, files) => {
             if (err) {
-                console.error("Error reading directory:", err);
-                return resolve([]); // Resolve with an empty array on error
+                console.error("Error reading proxy directory:", err);
+                return resolve([]);
             }
 
             if (files && files.length > 0) {
-                let pendingFiles = files.length; // Track the number of pending reads
+                let pendingFiles = files.length;
                 files.forEach((fileName) => {
                     fs.readFile(`${path}${fileName}`, 'utf8', (error, data) => {
-                        if (error) {
-                            console.error("Error reading file:", error);
-                        } else {
-                            const plist = data.toString().split("\n"); // Split file content by newlines
-                            proxyList.push(...plist); // Add all proxies to the proxyList
+                        if (!error) {
+                            proxyList.push(...data.toString().split("\n"));
                         }
-
-                        // Decrement pending files and resolve when all files are processed
-                        pendingFiles--;
-                        if (pendingFiles === 0) {
+                        if (--pendingFiles === 0) {
                             resolve(proxyList);
                         }
                     });
                 });
             } else {
-                resolve([]); // Resolve with an empty array if no files are in the directory
+                resolve([]);
             }
         });
     });

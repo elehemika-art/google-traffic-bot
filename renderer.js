@@ -10,6 +10,7 @@ $(document).ready(async function() {
     }
     if (localStorage.getItem('headless') === 'true') $("#headless").prop('checked', true);
     if (localStorage.getItem('minimize') === 'false') $("#minimize-windows").prop('checked', false);
+    if (localStorage.getItem('useProxies') === 'false') $("#use-proxies").prop('checked', false);
 
     $("#keyboard").hide()
     
@@ -73,6 +74,7 @@ $(document).ready(async function() {
         var option = $("#option").val()
         var headless = $("#headless").is(":checked")  // 👈 reads the checkbox
         var minimize = $("#minimize-windows").is(":checked") // 👈 reads the new checkbox
+        var useProxies = $("#use-proxies").is(":checked")
         if (url.length < 8) return alertbox("URL cant be empty!", 'danger', 5000)
         if (option == "Google")
             if (keyboard <= 0) return alertbox("Keyboard cant be empty!", 'danger', 5000)
@@ -86,8 +88,9 @@ $(document).ready(async function() {
         localStorage.setItem('option', option);
         localStorage.setItem('headless', headless);
         localStorage.setItem('minimize', minimize);
+        localStorage.setItem('useProxies', useProxies);
 
-        window.seo.start(url, keyboard, parseInt(count), option, headless, parseInt(maxTabs), minimize)
+        window.seo.start(url, keyboard, parseInt(count), option, headless, parseInt(maxTabs), minimize, useProxies)
         alertbox("Process started", 'success', 20000)
     })
 

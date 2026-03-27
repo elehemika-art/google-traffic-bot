@@ -17,8 +17,8 @@ async function createWindow() {
 }
 
 
-ipcMain.handle('start', async (event, url, keyboard, count, option, headless, concurrent, minimize) => {
-    seobot.main(url, keyboard, count, option, headless, concurrent, minimize)  // 👈 pass minimize through
+ipcMain.handle('start', async (event, url, keyboard, count, option, headless, concurrent, minimize, useProxies) => {
+    seobot.main(url, keyboard, count, option, headless, concurrent, minimize, useProxies)
 })
 
 

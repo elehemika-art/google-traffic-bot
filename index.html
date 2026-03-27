@@ -27,12 +27,15 @@
                 radial-gradient(circle at 85% 30%, rgba(46, 160, 67, 0.04), transparent 30%);
             color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             display: flex;
             justify-content: center;
-            align-items: center;
-            overflow: hidden;
+            align-items: flex-start;
+            padding: 20px 0;
+            box-sizing: border-box;
+            overflow-y: auto;
+            overflow-x: hidden;
             -webkit-user-select: none; /* Make it feel like a desktop app */
             user-select: none;
         }
@@ -351,6 +354,14 @@
             <div class="input-group mb-2 mt-2">
                 <span class="input-group-text">PROXIES</span>
                 <input type="text" id="proxys" class="form-control" placeholder="Loading..." disabled>
+            </div>
+
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="use-proxies" checked>
+                <label class="form-check-label" for="use-proxies">
+                    Use proxy list
+                </label>
+                <span class="info-icon" data-tooltip="If unchecked, the bot will use your regular network IP instead of routing through proxyscrape IPs. Use if receiving proxy errors">?</span>
             </div>
             
             <div class="form-check mt-3">

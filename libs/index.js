@@ -69,7 +69,15 @@ function nextPage(Driver, url, pageCount = 0){
             var nextBtn = await Driver.findElement(webDriver.By.id('pnnext'))
             await nextBtn.click()
         } catch(e) {
-            await Driver.executeScript("window.scrollBy(0, 800)")
+            await Driver.executeScript("window.scrollTo(0, document.body.scrollHeight);")
+            await randomDelay(1000, 2000)
+            try {
+                // Modern Google often uses infinite scroll with a 'More results' button
+                var moreBtn = await Driver.findElements(webDriver.By.xpath("//*[contains(text(), 'More results') or contains(text(), 'Más resultados') or contains(text(), 'Altre ricerche') or contains(text(), 'Weitere Ergebnisse')]"))
+                if (moreBtn.length > 0 && await moreBtn[0].isDisplayed()) {
+                    await Driver.executeScript("arguments[0].click();", moreBtn[0])
+                }
+            } catch (err) {}
         }
         await randomDelay(800, 1500)
         var findURL = await findSiteUrl(Driver, url)
@@ -85,16 +93,27 @@ function nextPage(Driver, url, pageCount = 0){
 function clickPage(Driver, page_id){
     return new Promise(async (r) => {
         try {
-            var sites = await Driver.findElements(webDriver.By.className('LC20lb MBeuO DKV0Md'))
+            var sites = await Driver.findElements(webDriver.By.className('yuRUbf'))
             if (!sites[page_id]){
                 console.log('[CLICK]: page_id out of range')
                 return r(false)
             }
-            await sites[page_id].click()
+            var targetLink = await sites[page_id].findElement(webDriver.By.tagName('h3')) // Click the title instead of the raw link, which often has better click targets
+            await Driver.executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", targetLink);
+            await randomDelay(800, 1500)
+            await targetLink.click()
             await randomDelay(800, 1500)
             await Driver.executeScript(auto.scroll())
         } catch(e) {
             console.log('[CLICK]: error clicking page', e.message)
+            // Fallback click strategy if h3 fails
+            try {
+                var sites = await Driver.findElements(webDriver.By.css('.yuRUbf a'));
+                if (sites[page_id]) {
+                    await Driver.executeScript("arguments[0].click();", sites[page_id]);
+                    await Driver.executeScript(auto.scroll())
+                }
+            } catch (fallbackErr) {}
         }
         r(true)
     })
@@ -102,8 +121,11 @@ function clickPage(Driver, page_id){
 
 async function buildDriver(proxy, headless){
     var options = new chrome.Options()
-    if (proxy)
-        options.addArguments(`--proxy-server=http://${proxy}`)
+    if (proxy) {
+        // Handle proxies that already include protocol
+        const proxyStr = proxy.includes('://') ? proxy : `http://${proxy}`;
+        options.addArguments(`--proxy-server=${proxyStr}`);
+    }
     if (headless)
         options.addArguments('--headless=new')
     options.addArguments('--no-first-run')
@@ -119,16 +141,23 @@ async function buildDriver(proxy, headless){
         .build()
 }
 
-async function bypassConsent(driver){
-    await driver.get("https://www.google.com/")
-    await randomDelay(1000, 2500)
+async function bypassConsent(driver, proxy){
+    try {
+        await driver.get("https://www.google.com/")
+    } catch(e) {
+        console.log(`[GOOGLE]: Initial load failed with proxy ${proxy || 'DIRECT'}, retrying...`, e.message)
+        await delay(2000)
+        await driver.get("https://www.google.com/")
+    }
+    
+    await randomDelay(2000, 4000) // Give more time for proxies
     try {
         var buttons = await driver.findElements(webDriver.By.css('button'))
         for (var b of buttons){
             var text = await b.getText()
-            if (text.includes('Accept') || text.includes('I agree') || text.includes('Agree')){
+            if (text.includes('Accept') || text.includes('I agree') || text.includes('Agree') || text.includes('Accetto') || text.includes('Acepto') || text.includes('Ich stimme zu') || text.includes('Confirm') || text.includes('Allow all')){
                 await b.click()
-                await randomDelay(500, 1000)
+                await randomDelay(500, 1500)
                 break
             }
         }
@@ -228,6 +257,7 @@ async function organicDwell(driver, originalUrl) {
 
 async function Direct(url, headless, proxy, minimizeOption){
     let driver = null
+    console.log(`[DIRECT]: Task started using proxy: ${proxy || 'DIRECT'}`)
     try {
         driver = await buildDriver(proxy, headless)
         driverList.push({ driver: driver, time: Date.now() })
@@ -249,17 +279,18 @@ async function Direct(url, headless, proxy, minimizeOption){
 
 async function googleSearch(url, keyboard, headless, proxy, minimizeOption){
     var driver = null
+    console.log(`[GOOGLE]: Task started using proxy: ${proxy || 'DIRECT'}`)
     try {
         driver = await buildDriver(proxy, headless)
         driverList.push({ driver: driver, time: Date.now() })
         if (minimizeOption) { try { await driver.manage().window().minimize() } catch(e) {} }
         await Stealth(driver)
-        await bypassConsent(driver)
+        await bypassConsent(driver, proxy)
         await driver.wait(
-            webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"]')),
-            10000
+            webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"], [name="q"], [aria-label="Search"]')),
+            20000 
         )
-        var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"]'))
+        var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"], [name="q"], [aria-label="Search"]'))
         await typeSlowly(searchBox, keyboard)
         await randomDelay(300, 600)
         await searchBox.sendKeys(webDriver.Key.RETURN)
@@ -284,6 +315,7 @@ async function googleSearch(url, keyboard, headless, proxy, minimizeOption){
 
 async function proxyServer(url, keyboard, headless, proxy, minimizeOption){
     var driver = null
+    console.log(`[PROXY]: Task started using proxy: ${proxy || 'DIRECT'}`)
     try {
         driver = await buildDriver(proxy, headless)
         driverList.push({ driver: driver, time: Date.now() })
@@ -293,12 +325,12 @@ async function proxyServer(url, keyboard, headless, proxy, minimizeOption){
         await driver.findElement(webDriver.By.id('url')).sendKeys('https://www.google.com/')
         await driver.findElement(webDriver.By.id('requestSubmit')).click()
         await delay(12000)
-        await bypassConsent(driver)
+        await bypassConsent(driver, proxy)
         await driver.wait(
-            webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"]')),
-            10000
+            webDriver.until.elementLocated(webDriver.By.css('textarea[name="q"], input[name="q"], [name="q"], [aria-label="Search"]')),
+            20000
         )
-        var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"]'))
+        var searchBox = await driver.findElement(webDriver.By.css('textarea[name="q"], input[name="q"], [name="q"], [aria-label="Search"]'))
         await typeSlowly(searchBox, keyboard)
         await randomDelay(300, 600)
         await searchBox.sendKeys(webDriver.Key.RETURN)
@@ -347,7 +379,7 @@ async function runWorker() {
     }
 }
 
-async function main(url, keyboard, count, option, headless, concurrent, minimizeOption){
+async function main(url, keyboard, count, option, headless, concurrent, minimizeOption, useProxies = true){
     isRunning = true;
     activeCount = 0;
     totalCompleted = 0;
@@ -360,11 +392,11 @@ async function main(url, keyboard, count, option, headless, concurrent, minimize
     const proxies = await loadproxy();
     const cleanProxies = proxies.map(p => p.trim()).filter(p => p.length > 5);
 
-    console.log(`[${option}]: process started | URL: ${url} | Count: ${count} | MaxTabs: ${concurrent} | Proxies: ${cleanProxies.length}`);
+    console.log(`[${option}]: process started | URL: ${url} | Count: ${count} | MaxTabs: ${concurrent} | ProxiesMode: ${useProxies}`);
 
     // Populate queue with proxy rotation
     for (let i = 0; i < count; i++) {
-        const proxy = cleanProxies.length > 0 ? cleanProxies[i % cleanProxies.length] : null;
+        const proxy = (useProxies && cleanProxies.length > 0) ? cleanProxies[i % cleanProxies.length] : null;
         const taskFn = option === "Direct" ? () => Direct(url, headless, proxy, minimizeOption) :
                        option === "Google" ? () => googleSearch(url, keyboard, headless, proxy, minimizeOption) :
                        () => proxyServer(url, keyboard, headless, proxy, minimizeOption);
