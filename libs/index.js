@@ -28,6 +28,29 @@ const PERMISSIONS = [
 
 const MAX_CONCURRENT = 5
 
+const USER_AGENTS = [
+    // Mac Chrome
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    // Windows Chrome
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    // Windows Edge (blends in well)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+    // Linux Chrome
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+]
+
+function randomUA() {
+    return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
+}
+
 function delay(time){
     return new Promise(resolve => setTimeout(resolve, time))
 }
@@ -137,7 +160,10 @@ async function buildDriver(proxy, headless){
         'credentials_enable_service': false,
         'profile.password_manager_enabled': false
     })
-    options.addArguments('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36')
+    options.addArguments(`--user-agent=${randomUA()}`)
+    // Randomize accept-language slightly so headers match diverse real users
+    const langs = ['en-US,en;q=0.9', 'en-US,en;q=0.9,fr;q=0.8', 'en-GB,en;q=0.9', 'en-US,en;q=0.8']
+    options.addArguments(`--lang=${langs[Math.floor(Math.random() * langs.length)]}`)
     return await new webDriver.Builder()
         .forBrowser('chrome')
         .setChromeService(chromedriver)

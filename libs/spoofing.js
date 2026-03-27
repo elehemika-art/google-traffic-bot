@@ -1,5 +1,10 @@
 module.exports = function(){
+    // Generate a unique seed per process launch so all sessions from
+    // the same run share one canvas fingerprint (looks more natural)
+    // but differ from other bot runs.
+    const seed = Math.floor(Math.random() * 1000);
     return `(() => {
+        const _canvasSeed = ${seed};
         // 1. Remove webdriver flag
         try {
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -64,6 +69,71 @@ module.exports = function(){
             ...elementDescriptor,
             get: function() { return 'modernizr' === this.id ? 1 : elementDescriptor.get.apply(this) }
         });
+
+        // 11. Canvas fingerprint noise — adds imperceptible per-session pixel noise
+        // so every bot run produces a unique canvas hash
+        (function() {
+            const _toDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function(type, ...args) {
+                const ctx = this.getContext('2d');
+                if (ctx) {
+                    try {
+                        const imageData = ctx.getImageData(0, 0, this.width || 1, this.height || 1);
+                        const d = imageData.data;
+                        // Shift a handful of barely-visible pixels using the seed
+                        for (let i = 0; i < d.length; i += Math.floor(d.length / 8) + 1) {
+                            d[i] = (d[i] + _canvasSeed) & 0xff;
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                    } catch(e) {}
+                }
+                return _toDataURL.call(this, type, ...args);
+            };
+
+            const _getImageData = CanvasRenderingContext2D.prototype.getImageData;
+            CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+                const imageData = _getImageData.call(this, x, y, w, h);
+                const d = imageData.data;
+                for (let i = 0; i < d.length; i += Math.floor(d.length / 8) + 1) {
+                    d[i] = (d[i] + _canvasSeed) & 0xff;
+                }
+                return imageData;
+            };
+        })();
+
+        // 12. WebGL fingerprint spoofing
+        (function() {
+            const getParam = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(param) {
+                // UNMASKED_VENDOR_WEBGL
+                if (param === 37445) return 'Intel Inc.';
+                // UNMASKED_RENDERER_WEBGL
+                if (param === 37446) return 'Intel Iris OpenGL Engine';
+                return getParam.call(this, param);
+            };
+            // Also patch WebGL2
+            if (typeof WebGL2RenderingContext !== 'undefined') {
+                const getParam2 = WebGL2RenderingContext.prototype.getParameter;
+                WebGL2RenderingContext.prototype.getParameter = function(param) {
+                    if (param === 37445) return 'Intel Inc.';
+                    if (param === 37446) return 'Intel Iris OpenGL Engine';
+                    return getParam2.call(this, param);
+                };
+            }
+        })();
+
+        // 13. AudioContext fingerprint noise
+        (function() {
+            const _getChannelData = AudioBuffer.prototype.getChannelData;
+            AudioBuffer.prototype.getChannelData = function(...args) {
+                const data = _getChannelData.apply(this, args);
+                for (let i = 0; i < data.length; i += Math.floor(data.length / 8) + 1) {
+                    data[i] += (_canvasSeed * 0.0000001);
+                }
+                return data;
+            };
+        })();
+
     })()
     `
 }
