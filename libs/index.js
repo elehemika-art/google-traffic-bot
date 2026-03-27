@@ -42,87 +42,72 @@ function Stealth(driver){
     })
 }
 
-function findSiteUrl(Driver, url){
-    return new Promise(async (r) => {
-        try {
-            var sites = await Driver.findElements(webDriver.By.className('yuRUbf'))
-            for(var i = 0; i < sites.length; i++){
-                var target_url = await sites[i].findElement(webDriver.By.tagName('a')).getAttribute('href')
-                if(target_url.match(url)){
-                    return r(i)
+// Searches ALL anchor tags on the current page for an href matching `url`.
+// Returns the matching anchor element, or null if not found.
+async function findSiteUrl(Driver, url) {
+    try {
+        const anchors = await Driver.findElements(webDriver.By.css('#search a[href], #rso a[href]'))
+        for (let anchor of anchors) {
+            try {
+                const href = await anchor.getAttribute('href')
+                if (href && href.includes && href.match(url)) {
+                    const displayed = await anchor.isDisplayed().catch(() => true)
+                    if (displayed) {
+                        console.log(`[FIND]: found site at ${href}`)
+                        return anchor
+                    }
                 }
-            }
-        } catch(e) {
-            console.log('[FIND]: error finding site', e.message)
+            } catch(e) {}
         }
-        r(-1)
-    })
+    } catch(e) {
+        console.log('[FIND]: error scanning anchors', e.message)
+    }
+    return null
 }
 
-function nextPage(Driver, url, pageCount = 0){
-    return new Promise(async (r) => {
-        if (pageCount >= 25){
-            console.log('[SEARCH]: site not found in 25 pages, stopping')
-            return r(0)
-        }
+async function nextPage(Driver, url, pageCount = 0) {
+    if (pageCount >= 25) {
+        console.log('[SEARCH]: site not found in 25 pages, stopping')
+        return null
+    }
+    // Try clicking Next button first
+    try {
+        var nextBtn = await Driver.findElement(webDriver.By.id('pnnext'))
+        await nextBtn.click()
+    } catch(e) {
+        // Modern Google: scroll to bottom then click 'More results'
+        await Driver.executeScript('window.scrollTo(0, document.body.scrollHeight);')
+        await randomDelay(1000, 2000)
         try {
-            var nextBtn = await Driver.findElement(webDriver.By.id('pnnext'))
-            await nextBtn.click()
-        } catch(e) {
-            await Driver.executeScript("window.scrollTo(0, document.body.scrollHeight);")
-            await randomDelay(1000, 2000)
-            try {
-                // Modern Google often uses infinite scroll with a 'More results' button
-                var moreBtn = await Driver.findElements(webDriver.By.xpath("//*[contains(text(), 'More results') or contains(text(), 'Más resultados') or contains(text(), 'Altre ricerche') or contains(text(), 'Weitere Ergebnisse')]"))
-                if (moreBtn.length > 0 && await moreBtn[0].isDisplayed()) {
-                    await Driver.executeScript("arguments[0].click();", moreBtn[0])
-                }
-            } catch (err) {}
-        }
-        await randomDelay(800, 1500)
-        var findURL = await findSiteUrl(Driver, url)
-        await randomDelay(800, 1500)
-        if(findURL == -1){
-            await nextPage(Driver, url, pageCount + 1)
-        } else {
-            r(findURL)
-        }
-    })
+            var moreBtns = await Driver.findElements(webDriver.By.xpath("//*[contains(text(),'More results') or contains(text(),'Más resultados') or contains(text(),'Weitere Ergebnisse')]"))
+            if (moreBtns.length > 0) await Driver.executeScript('arguments[0].click();', moreBtns[0])
+        } catch(err) {}
+    }
+    await randomDelay(1500, 2500)
+    var found = await findSiteUrl(Driver, url)
+    if (!found) return nextPage(Driver, url, pageCount + 1)
+    return found
 }
 
-function clickPage(Driver, page_id){
-    return new Promise(async (r) => {
-        try {
-            var sites = await Driver.findElements(webDriver.By.className('yuRUbf'))
-            if (!sites[page_id]){
-                console.log('[CLICK]: page_id out of range')
-                return r(false)
-            }
-            var targetLink = await sites[page_id].findElement(webDriver.By.tagName('h3')) // Click the title instead of the raw link, which often has better click targets
-            await Driver.executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", targetLink);
-            await randomDelay(800, 1500)
-            await targetLink.click()
-            await randomDelay(800, 1500)
-            await Driver.executeScript(auto.scroll())
-        } catch(e) {
-            console.log('[CLICK]: error clicking page', e.message)
-            // Fallback click strategy if h3 fails
-            try {
-                var sites = await Driver.findElements(webDriver.By.css('.yuRUbf a'));
-                if (sites[page_id]) {
-                    await Driver.executeScript("arguments[0].click();", sites[page_id]);
-                    await Driver.executeScript(auto.scroll())
-                }
-            } catch (fallbackErr) {}
-        }
-        r(true)
-    })
+async function clickSiteElement(Driver, element) {
+    try {
+        await Driver.executeScript('arguments[0].scrollIntoView({behavior: "smooth", block: "center"});', element)
+        await randomDelay(800, 1500)
+        // Try JS click first (most reliable, bypasses overlay issues)
+        await Driver.executeScript('arguments[0].click();', element)
+        await randomDelay(800, 1500)
+        await Driver.executeScript(auto.scroll())
+        console.log('[CLICK]: successfully clicked result')
+        return true
+    } catch(e) {
+        console.log('[CLICK]: error clicking element', e.message)
+        return false
+    }
 }
 
 async function buildDriver(proxy, headless){
     var options = new chrome.Options()
     if (proxy) {
-        // Handle proxies that already include protocol
         const proxyStr = proxy.includes('://') ? proxy : `http://${proxy}`;
         options.addArguments(`--proxy-server=${proxyStr}`);
     }
@@ -295,12 +280,12 @@ async function googleSearch(url, keyboard, headless, proxy, minimizeOption){
         await randomDelay(300, 600)
         await searchBox.sendKeys(webDriver.Key.RETURN)
         await randomDelay(1500, 2500)
-        var pageId = await findSiteUrl(driver, url)
+        var siteElement = await findSiteUrl(driver, url)
         await randomDelay(800, 1500)
-        if (pageId == -1)
-            pageId = await nextPage(driver, url, 0)
+        if (!siteElement)
+            siteElement = await nextPage(driver, url, 0)
         await randomDelay(500, 1000)
-        await clickPage(driver, pageId)
+        if (siteElement) await clickSiteElement(driver, siteElement)
         await organicDwell(driver, url) // Smart browsing
     } catch(e) {
         console.log('[GOOGLE]: error during search', e.message)
@@ -335,12 +320,12 @@ async function proxyServer(url, keyboard, headless, proxy, minimizeOption){
         await randomDelay(300, 600)
         await searchBox.sendKeys(webDriver.Key.RETURN)
         await randomDelay(1500, 2500)
-        var pageId = await findSiteUrl(driver, url)
+        var siteElement = await findSiteUrl(driver, url)
         await randomDelay(800, 1500)
-        if (pageId == -1)
-            pageId = await nextPage(driver, url, 0)
+        if (!siteElement)
+            siteElement = await nextPage(driver, url, 0)
         await randomDelay(500, 1000)
-        await clickPage(driver, pageId)
+        if (siteElement) await clickSiteElement(driver, siteElement)
         await organicDwell(driver, url) // Smart browsing
     } catch(e) {
         console.log('[PROXY]: error during proxy search', e.message)
@@ -392,7 +377,7 @@ async function main(url, keyboard, count, option, headless, concurrent, minimize
     const proxies = await loadproxy();
     const cleanProxies = proxies.map(p => p.trim()).filter(p => p.length > 5);
 
-    console.log(`[${option}]: process started | URL: ${url} | Count: ${count} | MaxTabs: ${concurrent} | ProxiesMode: ${useProxies}`);
+    console.log(`[${option}]: process started | URL: ${url} | Count: ${count} | MaxTabs: ${concurrent} | Proxies: ${cleanProxies.length} | UseProxies: ${useProxies}`);
 
     // Populate queue with proxy rotation
     for (let i = 0; i < count; i++) {
