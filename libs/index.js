@@ -8,12 +8,22 @@ const spoofing = require('./spoofing')
 
 const PERMISSIONS = [
     "--mute-audio",
-    "--disable-logging",
     "--disable-infobars",
     "--disable-dev-shm-usage",
     "--disable-blink-features=AutomationControlled",
     "--no-sandbox",
-    "--window-size=1366,768",
+    // Fix slow background tabs
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--disable-features=IsolateOrigins,site-per-process",
+    // Look more human
+    "--disable-web-security",
+    "--allow-running-insecure-content",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--password-store=basic",
+    "--use-mock-keychain",
 ]
 
 const MAX_CONCURRENT = 5
@@ -105,6 +115,10 @@ async function clickSiteElement(Driver, element) {
     }
 }
 
+const WINDOW_SIZES = [
+    [1366, 768], [1440, 900], [1536, 864], [1600, 900], [1920, 1080], [1280, 800], [1280, 720]
+]
+
 async function buildDriver(proxy, headless){
     var options = new chrome.Options()
     if (proxy) {
@@ -113,11 +127,16 @@ async function buildDriver(proxy, headless){
     }
     if (headless)
         options.addArguments('--headless=new')
-    options.addArguments('--no-first-run')
-    options.addArguments('--no-default-browser-check')
+    // Random window size so every tab doesn't look identical
+    const wsize = WINDOW_SIZES[Math.floor(Math.random() * WINDOW_SIZES.length)]
+    options.addArguments(`--window-size=${wsize[0]},${wsize[1]}`)
     PERMISSIONS.forEach(perms => options.addArguments(perms))
     options.excludeSwitches('enable-automation')
     options.excludeSwitches('enable-logging')
+    options.setUserPreferences({
+        'credentials_enable_service': false,
+        'profile.password_manager_enabled': false
+    })
     options.addArguments('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36')
     return await new webDriver.Builder()
         .forBrowser('chrome')
